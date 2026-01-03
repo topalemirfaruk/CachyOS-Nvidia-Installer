@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import DriverCard from './components/DriverCard';
 import Toggle from './components/Toggle';
+import { translations, type Language } from './locales';
 
 declare global {
   interface Window {
@@ -19,57 +20,75 @@ declare global {
   }
 }
 
-const AVAILABLE_DRIVERS = [
+const DRIVER_IDS = [
   {
     id: 'nvidia-open-dkms',
     name: 'nvidia-open-dkms',
-    description: 'Açık Kaynaklı Modüller (DKMS) - Önerilen',
     repo: 'CachyOS / Extra',
     isProprietary: false
   },
   {
     id: 'nvidia-dkms',
     name: 'nvidia-dkms',
-    description: 'Sahipli Sürücü (DKMS) - Mevcutsa',
     repo: 'Extra',
     isProprietary: true
   },
   {
     id: 'nvidia-550xx-dkms',
     name: 'nvidia-550xx-dkms',
-    description: 'Eski Sürücü (550 Series)',
     repo: 'CachyOS',
     isProprietary: true
   }
 ];
 
 function App() {
-  const [gpuModel, setGpuModel] = useState("Aranıyor...");
+  const [gpuModel, setGpuModel] = useState("...");
   const [useRepo, setUseRepo] = useState(true);
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   const [disableSecondary, setDisableSecondary] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentDriver, setCurrentDriver] = useState<string | null>(null);
-  /* 
-   * Main State
-   */
   const [driverVersions, setDriverVersions] = useState<Record<string, string>>({});
   const [versionsLoaded, setVersionsLoaded] = useState(false);
+
+  // Language Detection
+  const [lang, setLang] = useState<Language>('en'); // Default to English initially
+
+  useEffect(() => {
+    // Detect system language
+    const systemLang = navigator.language.split('-')[0];
+    if (systemLang === 'tr') {
+      setLang('tr');
+    } else {
+      setLang('en');
+    }
+  }, []);
+
+  const t = translations[lang];
 
   useEffect(() => {
     // START VISIBLE DEBUGGING
     console.log("DEBUG: Component Mounted");
+    setGpuModel(t.searching);
+
+    let attempts = 0;
+    const maxAttempts = 30; // ~10 seconds of retry
 
     const checkSystem = async () => {
-      console.log("DEBUG: Starting checkSystem...");
+      console.log(`DEBUG: Starting checkSystem (Attempt ${attempts + 1}/${maxAttempts})...`);
+
+      // Check window.api explicitly
+      if (typeof window.api === 'undefined') {
+        console.warn("DEBUG: window.api is UNDEFINED");
+      } else {
+        console.log("DEBUG: window.api FOUND");
+      }
 
       // 1. Check if window.api exists
       if (window.api) {
-        console.log("DEBUG: window.api FOUND");
-
+        setGpuModel(`${t.searching} (API OK)`);
         // TEST PING
-        console.log("DEBUG: Sending PING...");
         window.api.ping();
         window.api.onPong((msg) => {
           console.log(`DEBUG: 🎾 PONG RECEIVED: ${msg}`);
@@ -78,6 +97,7 @@ function App() {
         try {
           // 2. Call getGPUInfo with formatted logging
           console.log("DEBUG: Calling getGPUInfo (IPC)...");
+          setGpuModel(`${t.searching} (IPC...)`);
 
           // Add a timeout race
           const result = await Promise.race([
@@ -94,7 +114,7 @@ function App() {
           console.log(`DEBUG: Drivers Found => ${JSON.stringify(installed)}`);
 
           // 4. Match Drivers
-          const installedMatch = AVAILABLE_DRIVERS.find(d => installed.some(i => i.name === d.id));
+          const installedMatch = DRIVER_IDS.find(d => installed.some(i => i.name === d.id));
           if (installedMatch) {
             setCurrentDriver(installedMatch.id);
             setSelectedDriver(installedMatch.id);
@@ -114,14 +134,24 @@ function App() {
         }
       } else {
         // 6. API Missing
-        console.error("window.api undefined");
-        setGpuModel("API Bulunamadı");
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.log(`API not ready, retrying (${attempts}/${maxAttempts})...`);
+          setTimeout(checkSystem, 300);
+        } else {
+          console.error("window.api undefined after exhaustion");
+          setGpuModel(t.apiMissing);
+        }
       }
     };
 
     // Run with small delay to ensure Electron preload is ready
-    setTimeout(checkSystem, 500);
-  }, []);
+    setTimeout(checkSystem, 750);
+  }, [lang]); // Re-run if lang changes, though mostly for initial load
+
+  const toggleLanguage = () => {
+    setLang(prev => prev === 'tr' ? 'en' : 'tr');
+  };
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
@@ -131,7 +161,7 @@ function App() {
     if (!currentDriver || !window.api) return;
 
     // Simple confirmation
-    if (!confirm(`Şu an yüklü olan sürücüyü (${currentDriver}) kaldırmak istediğinize emin misiniz?`)) return;
+    if (!confirm(t.confirmRemove.replace('{driver}', currentDriver))) return;
 
     setLoading(true);
     try {
@@ -139,15 +169,15 @@ function App() {
 
       // Refresh status
       const installed = await window.api.getInstalledDrivers();
-      const installedMatch = AVAILABLE_DRIVERS.find(d => installed.some(i => i.name === d.id));
+      const installedMatch = DRIVER_IDS.find(d => installed.some(i => i.name === d.id));
       if (installedMatch) {
         setCurrentDriver(installedMatch.id);
       } else {
         setCurrentDriver(null);
       }
-      alert("Sürücü başarıyla kaldırıldı!\\nLütfen sistemi yeniden başlatın.");
+      alert(t.successRemove);
     } catch (error) {
-      alert("Kaldırma işlemi başarısız!\\nLütfen konsolu kontrol edin.");
+      alert(t.failRemove);
     } finally {
       setLoading(false);
     }
@@ -162,13 +192,13 @@ function App() {
 
       // Refresh status
       const installed = await window.api.getInstalledDrivers();
-      const installedMatch = AVAILABLE_DRIVERS.find(d => installed.some(i => i.name === d.id));
+      const installedMatch = DRIVER_IDS.find(d => installed.some(i => i.name === d.id));
       if (installedMatch) {
         setCurrentDriver(installedMatch.id);
       }
-      alert("İşlem Başarılı!\\nLütfen sistemi yeniden başlatın.");
+      alert(t.successInstall);
     } catch (error) {
-      alert("Hata oluştu!\\nLütfen konsolu kontrol edin.");
+      alert(t.failInstall);
     } finally {
       setLoading(false);
     }
@@ -192,7 +222,7 @@ function App() {
           </button>
         </div>
 
-        <span className={`absolute left-0 right-0 text-center font-bold text-sm pointer-events-none ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>CachyOS Nvidia Kurucu</span>
+        <span className={`absolute left-0 right-0 text-center font-bold text-sm pointer-events-none ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>{t.title}</span>
 
         <div className="flex items-center gap-2 z-10" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <button onClick={() => window.api?.minimize()} className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors ${darkMode ? 'bg-gray-600 hover:bg-gray-500 text-gray-200' : 'bg-gray-300 hover:bg-gray-400 text-gray-600'}`}>_</button>
@@ -202,12 +232,12 @@ function App() {
       </div>
 
       <div className={`flex-1 p-2 flex flex-col items-center overflow-y-auto no-scrollbar transition-colors duration-300 ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
-        <Header gpuModel={gpuModel} darkMode={darkMode} />
+        <Header gpuModel={gpuModel} darkMode={darkMode} onToggleLang={toggleLanguage} lang={lang} />
 
         <div className="w-full max-w-[480px]">
           {/* Toggle Section */}
           <div className="flex justify-between items-center mb-3 px-2">
-            <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Nvidia Deposunu Kullan</span>
+            <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>{t.useRepo}</span>
             <Toggle
               label=""
               checked={useRepo}
@@ -217,20 +247,21 @@ function App() {
 
           {/* Driver List */}
           <div className="flex flex-col gap-2 mb-2">
-            {AVAILABLE_DRIVERS.map(driver => (
+            {DRIVER_IDS.map(driver => (
               <DriverCard
                 key={driver.id}
                 id={driver.id}
                 name={driver.name}
                 version={
                   currentDriver === driver.id
-                    ? `${driverVersions[driver.id] || "Bilinmiyor"} (Kurulu)`
+                    ? `${driverVersions[driver.id] || t.unknown} (${t.installed})`
                     : versionsLoaded
-                      ? (driverVersions[driver.id] || "Paket Bulunamadı")
-                      : "Yükleniyor..."
+                      ? (driverVersions[driver.id] || t.packageNotFound)
+                      : t.loading
                 }
-                description={driver.description}
+                description={t.drivers[driver.id as keyof typeof t.drivers]}
                 repo={driver.repo}
+                labels={t.cardLabels}
                 isProprietary={driver.isProprietary}
                 selected={selectedDriver === driver.id}
                 onSelect={(id) => setSelectedDriver(id)}
@@ -249,6 +280,8 @@ function App() {
               isProprietary={false}
               disabledVariant={true}
               darkMode={darkMode}
+              labels={t.cardLabels}
+              disableText={t.disableSecondary}
             />
           </div>
 
@@ -259,7 +292,7 @@ function App() {
                 disabled={loading}
                 className={`font-bold py-2 px-6 rounded shadow-md transition-colors duration-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''} bg-red-600 hover:bg-red-500 text-white shadow-red-500/20`}
               >
-                {loading ? '...' : 'Kaldır'}
+                {loading ? '...' : t.remove}
               </button>
             )}
             <button
@@ -267,7 +300,7 @@ function App() {
               disabled={loading}
               className={`font-bold py-2 px-8 rounded shadow-md transition-colors duration-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''} ${darkMode ? 'bg-cyan-700 hover:bg-cyan-600 text-white shadow-cyan-900/20' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-500/20'}`}
             >
-              {loading ? 'İşleniyor...' : 'Yükle / Uygula'}
+              {loading ? t.processing : t.installApply}
             </button>
           </div>
 

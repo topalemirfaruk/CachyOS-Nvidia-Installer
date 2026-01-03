@@ -13,6 +13,8 @@ let mainWindow: BrowserWindow | null = null;
 
 const createWindow = () => {
   const preloadPath = path.join(__dirname, 'preload.js');
+  console.log("DEBUG: __dirname:", __dirname);
+  console.log("DEBUG: Preload Path:", preloadPath);
 
   mainWindow = new BrowserWindow({
     width: 550,
@@ -48,14 +50,15 @@ function setupHandlers() {
   // REAL GPU INFO
   ipcMain.handle('get-gpu-info', async () => {
     try {
-      const { stdout } = await execPromise("lspci -mm | grep -E 'VGA|3D' -i");
+      // Force C locale to ensure consistent output format (avoids locale-specific headers)
+      const { stdout } = await execPromise("LC_ALL=C lspci -mm | grep -E 'VGA|3D' -i");
       console.log("LSPCI RAW Output:", stdout);
 
       const lines = stdout.trim().split('\n');
       if (lines.length === 0) return "GPU Bulunamadı";
 
-      // 1. Find the NVIDIA line
-      const nvidiaLine = lines.find(line => line.toLowerCase().includes('nvidia')) || lines[0];
+      // 1. Find the NVIDIA line using Regex (safer than toLowerCase in Turkish locale)
+      const nvidiaLine = lines.find(line => /nvidia/i.test(line)) || lines[0];
 
       // 2. Extract friendly name from brackets [GeForce RTX 4090]
       // Format usually: 00:00.0 "VGA" "Vendor" "Device [Friendly Name]"

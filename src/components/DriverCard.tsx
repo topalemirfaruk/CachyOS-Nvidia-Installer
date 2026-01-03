@@ -10,9 +10,16 @@ interface DriverCardProps {
     isProprietary: boolean;
     disabledVariant?: boolean; // For the "Disable Secondary" card
     darkMode: boolean; // Add dark mode prop
+    labels: {
+        driver: string;
+        version: string;
+        description: string;
+        repo: string;
+    };
+    disableText?: string;
 }
 
-export default function DriverCard({ id, name, version, description, repo, selected, onSelect, isProprietary, disabledVariant, darkMode }: DriverCardProps) {
+export default function DriverCard({ id, name, version, description, repo, selected, onSelect, isProprietary, disabledVariant, darkMode, labels, disableText }: DriverCardProps) {
     return (
         <div
             onClick={() => onSelect(id)}
@@ -68,17 +75,17 @@ export default function DriverCard({ id, name, version, description, repo, selec
             {/* Details */}
             {disabledVariant ? (
                 <div className="flex-1">
-                    <span className={`font-medium text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>İkincil Ekran Kartını Devre Dışı Bırak</span>
+                    <span className={`font-medium text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{disableText}</span>
                 </div>
             ) : (
                 <div className="flex-1 text-[13px] leading-tight">
-                    <div><span className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>Sürücü:</span> <span className={`${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>{name}</span></div>
-                    <div><span className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>Sürüm:</span> <span className={`${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>{version}</span></div>
+                    <div><span className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>{labels.driver}</span> <span className={`${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>{name}</span></div>
+                    <div><span className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>{labels.version}</span> <span className={`${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>{version}</span></div>
                     <div>
-                        <span className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>Açıklama:</span>
+                        <span className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>{labels.description}</span>
                         <span className={`ml-1 font-medium ${isProprietary ? 'text-blue-500' : 'text-green-500'}`}>{description}</span>
                     </div>
-                    <div><span className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>Repo:</span> <span className={`${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>{repo}</span></div>
+                    <div><span className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>{labels.repo}</span> <span className={`${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>{repo}</span></div>
                 </div>
             )}
         </div>

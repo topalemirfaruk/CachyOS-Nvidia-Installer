@@ -14,7 +14,14 @@ A modern, user-friendly GUI application developed for CachyOS to simplify the in
   - **nvidia-550xx-dkms**: Legacy support for older cards.
 - **One-Click Actions**: Easily **Install** or **Remove** drivers via the GUI.
 - **Modern UI**: Clean, responsive interface built with React and TailwindCSS.
-- **Dark Mode**: Fully supported dark/light themes.
+- **Internationalization (i18n)**: 
+  - Full support for **Turkish** and **English**.
+  - Automatic language detection based on system preferences.
+  - Manual language toggle support.
+- **Robustness**: 
+  - Improved API connection with auto-retry mechanism.
+  - Safe GPU detection (locale-independent Regex logic).
+- **Dark Mode**: Fully supported dark/light themes with persistence.
 
 ## Tech Stack
 
