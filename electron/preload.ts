@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
     getInstalledDrivers: () => ipcRenderer.invoke('get-installed-drivers'),
     installDriver: (driverName: string, disableSecondary: boolean) => ipcRenderer.invoke('install-driver', driverName, disableSecondary),
     removeDriver: (driverName: string) => ipcRenderer.invoke('remove-driver', driverName),
+    getDriverVersions: () => ipcRenderer.invoke('get-driver-versions'),
 
     // Debug Ping
     ping: () => {

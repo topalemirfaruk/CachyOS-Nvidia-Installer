@@ -9,8 +9,9 @@ declare global {
       minimize: () => void;
       getGPUInfo: () => Promise<string>;
       getInstalledDrivers: () => Promise<Array<{ name: string; version: string }>>;
-      installDriver: (driverName: string) => Promise<boolean>;
+      installDriver: (driverName: string, disableSecondary: boolean) => Promise<boolean>;
       removeDriver: (driverName: string) => Promise<boolean>;
+      getDriverVersions: () => Promise<Record<string, string>>;
       getKernelInfo: () => Promise<string>;
       ping: () => void;
       onPong: (callback: (msg: string) => void) => void;
@@ -20,30 +21,23 @@ declare global {
 
 const AVAILABLE_DRIVERS = [
   {
-    id: 'nvidia-dkms', // Package name
-    name: 'nvidia-dkms',
-    description: 'Sahipli Sürücü (Önerilen)',
-    repo: 'CachyOS',
-    isProprietary: true
-  },
-  {
     id: 'nvidia-open-dkms',
     name: 'nvidia-open-dkms',
-    description: 'Açık Kaynaklı Modüller (DKMS)',
-    repo: 'CachyOS',
+    description: 'Açık Kaynaklı Modüller (DKMS) - Önerilen',
+    repo: 'CachyOS / Extra',
+    isProprietary: false
+  },
+  {
+    id: 'nvidia-dkms',
+    name: 'nvidia-dkms',
+    description: 'Sahipli Sürücü (DKMS) - Mevcutsa',
+    repo: 'Extra',
     isProprietary: true
   },
   {
-    id: 'nvidia-lts',
-    name: 'nvidia-lts',
-    description: 'Sahipli Sürücü (LTS Kernel)',
-    repo: 'CachyOS',
-    isProprietary: true
-  },
-  {
-    id: 'nvidia',
-    name: 'nvidia',
-    description: 'Sahipli Sürücü (Standart Kernel)',
+    id: 'nvidia-550xx-dkms',
+    name: 'nvidia-550xx-dkms',
+    description: 'Eski Sürücü (550 Series)',
     repo: 'CachyOS',
     isProprietary: true
   }
@@ -57,32 +51,33 @@ function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentDriver, setCurrentDriver] = useState<string | null>(null);
-
-  // Debug State
-  const [logs, setLogs] = useState<string[]>(["SYSTEM READY - WAITING FOR LOGS..."]);
-  const addLog = (msg: string) => setLogs(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
+  /* 
+   * Main State
+   */
+  const [driverVersions, setDriverVersions] = useState<Record<string, string>>({});
+  const [versionsLoaded, setVersionsLoaded] = useState(false);
 
   useEffect(() => {
     // START VISIBLE DEBUGGING
-    addLog("DEBUG: Component Mounted");
+    console.log("DEBUG: Component Mounted");
 
     const checkSystem = async () => {
-      addLog("DEBUG: Starting checkSystem...");
+      console.log("DEBUG: Starting checkSystem...");
 
       // 1. Check if window.api exists
       if (window.api) {
-        addLog("DEBUG: window.api FOUND");
+        console.log("DEBUG: window.api FOUND");
 
         // TEST PING
-        addLog("DEBUG: Sending PING...");
+        console.log("DEBUG: Sending PING...");
         window.api.ping();
         window.api.onPong((msg) => {
-          addLog(`DEBUG: 🎾 PONG RECEIVED: ${msg}`);
+          console.log(`DEBUG: 🎾 PONG RECEIVED: ${msg}`);
         });
 
         try {
           // 2. Call getGPUInfo with formatted logging
-          addLog("DEBUG: Calling getGPUInfo (IPC)...");
+          console.log("DEBUG: Calling getGPUInfo (IPC)...");
 
           // Add a timeout race
           const result = await Promise.race([
@@ -90,30 +85,36 @@ function App() {
             new Promise<string>((_, reject) => setTimeout(() => reject("TIMEOUT: IPC took too long"), 5000))
           ]);
 
-          addLog(`DEBUG: GPU Result => ${result}`);
+          console.log(`DEBUG: GPU Result => ${result}`);
           setGpuModel(result);
 
           // 3. Check Drivers
-          addLog("DEBUG: Checking Installed Drivers...");
+          console.log("DEBUG: Checking Installed Drivers...");
           const installed = await window.api.getInstalledDrivers();
-          addLog(`DEBUG: Drivers Found => ${JSON.stringify(installed)}`);
+          console.log(`DEBUG: Drivers Found => ${JSON.stringify(installed)}`);
 
           // 4. Match Drivers
           const installedMatch = AVAILABLE_DRIVERS.find(d => installed.some(i => i.name === d.id));
           if (installedMatch) {
             setCurrentDriver(installedMatch.id);
             setSelectedDriver(installedMatch.id);
-            addLog(`DEBUG: Driver Matched => ${installedMatch.id}`);
+            console.log(`DEBUG: Driver Matched => ${installedMatch.id}`);
           }
+
+          // 5. Check Available Versions
+          const versions = await window.api.getDriverVersions();
+          setDriverVersions(versions);
+          setVersionsLoaded(true);
+
         } catch (err: any) {
           // 5. Catch Errors
           const errMsg = err?.message || JSON.stringify(err);
-          addLog(`DEBUG: CRITICAL ERROR => ${errMsg}`);
+          console.error(errMsg);
           setGpuModel(`Error: ${errMsg}`);
         }
       } else {
         // 6. API Missing
-        addLog("DEBUG: CRITICAL - window.api undefined");
+        console.error("window.api undefined");
         setGpuModel("API Bulunamadı");
       }
     };
@@ -126,12 +127,38 @@ function App() {
     setDarkMode(!darkMode);
   };
 
+  const handleRemove = async () => {
+    if (!currentDriver || !window.api) return;
+
+    // Simple confirmation
+    if (!confirm(`Şu an yüklü olan sürücüyü (${currentDriver}) kaldırmak istediğinize emin misiniz?`)) return;
+
+    setLoading(true);
+    try {
+      await window.api.removeDriver(currentDriver);
+
+      // Refresh status
+      const installed = await window.api.getInstalledDrivers();
+      const installedMatch = AVAILABLE_DRIVERS.find(d => installed.some(i => i.name === d.id));
+      if (installedMatch) {
+        setCurrentDriver(installedMatch.id);
+      } else {
+        setCurrentDriver(null);
+      }
+      alert("Sürücü başarıyla kaldırıldı!\\nLütfen sistemi yeniden başlatın.");
+    } catch (error) {
+      alert("Kaldırma işlemi başarısız!\\nLütfen konsolu kontrol edin.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleApply = async () => {
     if (!selectedDriver || !window.api) return;
 
     setLoading(true);
     try {
-      await window.api.installDriver(selectedDriver);
+      await window.api.installDriver(selectedDriver, disableSecondary);
 
       // Refresh status
       const installed = await window.api.getInstalledDrivers();
@@ -195,7 +222,13 @@ function App() {
                 key={driver.id}
                 id={driver.id}
                 name={driver.name}
-                version={currentDriver === driver.id ? "(Kurulu)" : ""} // Simple status
+                version={
+                  currentDriver === driver.id
+                    ? `${driverVersions[driver.id] || "Bilinmiyor"} (Kurulu)`
+                    : versionsLoaded
+                      ? (driverVersions[driver.id] || "Paket Bulunamadı")
+                      : "Yükleniyor..."
+                }
                 description={driver.description}
                 repo={driver.repo}
                 isProprietary={driver.isProprietary}
@@ -219,13 +252,22 @@ function App() {
             />
           </div>
 
-          <div className="flex justify-center mt-4 mb-4">
+          <div className="flex justify-center mt-4 mb-4 gap-3">
+            {currentDriver && (
+              <button
+                onClick={handleRemove}
+                disabled={loading}
+                className={`font-bold py-2 px-6 rounded shadow-md transition-colors duration-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''} bg-red-600 hover:bg-red-500 text-white shadow-red-500/20`}
+              >
+                {loading ? '...' : 'Kaldır'}
+              </button>
+            )}
             <button
               onClick={handleApply}
               disabled={loading}
               className={`font-bold py-2 px-8 rounded shadow-md transition-colors duration-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''} ${darkMode ? 'bg-cyan-700 hover:bg-cyan-600 text-white shadow-cyan-900/20' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-500/20'}`}
             >
-              {loading ? 'İşleniyor...' : 'Değişiklikleri Uygula'}
+              {loading ? 'İşleniyor...' : 'Yükle / Uygula'}
             </button>
           </div>
 

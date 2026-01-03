@@ -7,12 +7,12 @@ A modern, user-friendly GUI application developed for CachyOS to simplify the in
 ## Features
 
 - **Automatic GPU Detection**: Instantly identifies your NVIDIA GPU model using `lspci`.
+- **Smart Driver Detection**: Automatically detects installed CachyOS driver packages (e.g., `linux-cachyos-nvidia-open`).
 - **Driver Management**:
-  - **nvidia-dkms**: Default proprietary driver (Recommended).
-  - **nvidia-open-dkms**: Open-source kernel modules.
-  - **nvidia-lts**: For LTS kernel users.
-  - **nvidia**: Standard proprietary driver.
-- **Hybrid Graphics Support**: Option to disable the specific secondary GPU (e.g., stopping Nouveau).
+  - **nvidia-open-dkms**: Open-source kernel modules (Recommended / Default).
+  - **nvidia-dkms**: Proprietary driver (if available).
+  - **nvidia-550xx-dkms**: Legacy support for older cards.
+- **One-Click Actions**: Easily **Install** or **Remove** drivers via the GUI.
 - **Modern UI**: Clean, responsive interface built with React and TailwindCSS.
 - **Dark Mode**: Fully supported dark/light themes.
 
